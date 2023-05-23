@@ -22,6 +22,7 @@ def schedule_markup():
         markup.add(button)
     return markup
 
+
 @bot.message_handler(commands=['help'])
 def help_func(message):
     help_text = "Доступные команды:\n\n" \
@@ -29,7 +30,8 @@ def help_func(message):
                 "/help - Получить список доступных команд\n\n" \
                 "/mtuci - Получить ссылку на официальный сайт МТУСИ\n\n" \
                 "/week - Получить информацию о текущей неделе\n\n" \
-                "/monday, /tuesday, /wednesday, /thursday, /friday, /saturday- Получить расписание на конкретный день недели\n\n" \
+                "/monday, /tuesday, /wednesday, /thursday, /friday, /saturday-Получить расписание на конкретный день " \
+                "недели\n\n" \
                 "/currentweek - Получить расписание на текущую неделю\n\n" \
                 "/nextweek - Получить расписание на следующую неделю\n"
     bot.send_message(message.chat.id, help_text)
