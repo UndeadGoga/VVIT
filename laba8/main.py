@@ -1,458 +1,350 @@
-import sys
+# Импортируем необходимые библиотеки и адаптеры
 import psycopg2
+import sys
+
 from PyQt5.QtWidgets import (QApplication, QWidget,
-                             QTableWidget, QTableWidgetItem, QTabWidget,
-                             QPushButton, QHBoxLayout, QDialog,
-                             QLineEdit, QVBoxLayout,
-                             QDialogButtonBox, QSizePolicy, QHeaderView,
-                             QMessageBox, QFormLayout, QTimeEdit)
-
-from PyQt5.QtCore import Qt, QTime
+                             QTabWidget, QAbstractScrollArea,
+                             QVBoxLayout, QHBoxLayout,
+                             QTableWidget, QGroupBox,
+                             QTableWidgetItem, QPushButton, QMessageBox)
 
 
-class MyMainWindow(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-
-#  создает диалоговое окно с полями ввода на основе предоставленного
-#  заголовка и полей. Он включает виджеты с полем ввода для каждого поля и предоставляет
-#  метод для получения введенных значений.№
-class InputDialog(QDialog):
-    def __init__(self, title, fields, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle(title)
-
-        self.fields = fields
-        self.line_edits = {}
-
-        layout = QFormLayout()
-
-        for field in fields:
-            line_edit = QLineEdit()
-            self.line_edits[field] = line_edit
-            layout.addRow(field, line_edit)
-
-        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, Qt.Horizontal, self)
-        self.buttons.accepted.connect(self.accept)
-        self.buttons.rejected.connect(self.reject)
-
-        layout.addWidget(self.buttons)
-        self.setLayout(layout)
-
-    def get_values(self):
-        values = {}
-        for field, line_edit in self.line_edits.items():
-            current_text = line_edit.text()
-            if current_text:
-                values[field] = current_text
-        return values
-
-
-class DatabaseApp(QWidget):
+class MainWindow(QWidget):  # Класс QTabWidget создает структуру, которую можно заполнять вкладками.
     def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Schedule")
-        self.setGeometry(100, 100, 800, 400)
-        self.connection = psycopg2.connect(database="lab8_db",
-                                           user="postgres",
-                                           password="12345",
-                                           host="localhost")
-        self.initUI()
-
-    # вкладки
-    def initUI(self):
-        layout = QVBoxLayout()
-
-        tab_widget = QTabWidget()
-        layout.addWidget(tab_widget)
-
-        self.subjects_widget = QWidget()
-        self.teachers_widget = QWidget()
-        self.schedule_widget = QWidget()
-
-        tab_widget.addTab(self.subjects_widget, "Предметы")
-        tab_widget.addTab(self.teachers_widget, "Преподаватели")
-        tab_widget.addTab(self.schedule_widget, "Расписание")
-
-        self.subjects_table = QTableWidget()
-        self.subjects_table.setColumnCount(3)
-        self.subjects_table.setHorizontalHeaderLabels(["ID", "Название", "Тип"])
-
-        self.subjects_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-
-        self.subjects_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.subjects_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.subjects_table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-
-        self.teachers_table = QTableWidget()
-        self.teachers_table.setColumnCount(2)
-        self.teachers_table.setHorizontalHeaderLabels(["ID", "Имя"])
-
-        self.teachers_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.teachers_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.teachers_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.teachers_table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-
-        self.schedule_day_tabs = QTabWidget()
-        self.monday_table = QTableWidget()
-        self.tuesday_table = QTableWidget()
-        self.wednesday_table = QTableWidget()
-        self.thursday_table = QTableWidget()
-        self.friday_table = QTableWidget()
-        self.saturday_table = QTableWidget()
-
-        day_tables = [self.monday_table, self.tuesday_table, self.wednesday_table,
-                      self.thursday_table, self.friday_table, self.saturday_table]
-
-        for table in day_tables:
-            table.setColumnCount(7)
-            table.setHorizontalHeaderLabels(
-                ['ID', 'Предмет', 'Преподаватель', 'Начало пары', 'Конец пары', 'Аудитория', 'Тип недели'])
-            table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-
-        self.schedule_day_tabs.addTab(self.monday_table, 'Понедельник')
-        self.schedule_day_tabs.addTab(self.tuesday_table, 'Вторник')
-        self.schedule_day_tabs.addTab(self.wednesday_table, 'Среда')
-        self.schedule_day_tabs.addTab(self.thursday_table, 'Четверг')
-        self.schedule_day_tabs.addTab(self.friday_table, 'Пятница')
-        self.schedule_day_tabs.addTab(self.saturday_table, 'Суббота')
-
-        self.subjects_layout = QVBoxLayout()
-        self.subjects_layout.addWidget(self.subjects_table)
-
-        self.teachers_layout = QVBoxLayout()
-        self.teachers_layout.addWidget(self.teachers_table)
-
-        self.schedule_layout = QVBoxLayout()
-        self.schedule_layout.addWidget(self.schedule_day_tabs)
-
-        self.subjects_widget.setLayout(self.subjects_layout)
-        self.teachers_widget.setLayout(self.teachers_layout)
-        self.schedule_widget.setLayout(self.schedule_layout)
-
-        self.add_btn = QPushButton("Добавить")
-        self.add_btn.clicked.connect(self.add_subjects)
-
-        self.update_btn = QPushButton("Обновить")
-        self.update_btn.clicked.connect(self.update_subjects)
-
-        self.delete_btn = QPushButton("Удалить")
-        self.delete_btn.clicked.connect(self.delete_subjects)
-
-        self.edit_btn = QPushButton("Изменить")
-        self.edit_btn.clicked.connect(self.edit_subjects)
-
-        subjects_btn_layout = QHBoxLayout()
-        subjects_btn_layout.addWidget(self.add_btn)
-        subjects_btn_layout.addWidget(self.update_btn)
-        subjects_btn_layout.addWidget(self.delete_btn)
-        subjects_btn_layout.addWidget(self.edit_btn)
-
-        self.subjects_layout.addLayout(subjects_btn_layout)
-
-        self.add_teachers_btn = QPushButton("Добавить")
-        self.add_teachers_btn.clicked.connect(self.add_teachers)
-
-        self.update_teachers_btn = QPushButton("Обновить")
-        self.update_teachers_btn.clicked.connect(self.update_teachers)
-
-        self.delete_teachers_btn = QPushButton("Удалить")
-        self.delete_teachers_btn.clicked.connect(self.delete_teachers)
-
-        self.edit_teachers_btn = QPushButton("Изменить")
-        self.edit_teachers_btn.clicked.connect(self.edit_teachers)
-
-        teachers_btn_layout = QHBoxLayout()
-        teachers_btn_layout.addWidget(self.add_teachers_btn)
-        teachers_btn_layout.addWidget(self.update_teachers_btn)
-        teachers_btn_layout.addWidget(self.delete_teachers_btn)
-        teachers_btn_layout.addWidget(self.edit_teachers_btn)
-
-        self.teachers_layout.addLayout(teachers_btn_layout)
-
-        self.add_schedule_btn = QPushButton("Добавить")
-        self.add_schedule_btn.clicked.connect(self.add_schedule_item)
-
-        self.update_schedule_btn = QPushButton("Обновить")
-        self.update_schedule_btn.clicked.connect(self.update_schedule)
-
-        self.delete_schedule_btn = QPushButton("Удалить")
-        self.delete_schedule_btn.clicked.connect(self.delete_schedule)
-
-        self.edit_schedule_btn = QPushButton("Изменить")
-        self.edit_schedule_btn.clicked.connect(self.edit_schedule)
-
-        schedule_btn_layout = QHBoxLayout()
-        schedule_btn_layout.addWidget(self.add_schedule_btn)
-        schedule_btn_layout.addWidget(self.update_schedule_btn)
-        schedule_btn_layout.addWidget(self.delete_schedule_btn)
-        schedule_btn_layout.addWidget(self.edit_schedule_btn)
-
-        self.schedule_layout.addLayout(schedule_btn_layout)
-
-        self.setLayout(layout)
-
-        self.update_subjects()
-        self.update_teachers()
-        self.update_schedule()
-
-    # Данная функция execute_query выполняет SQL-запрос к базе данных с использованием соединения self.connection
-    def execute_query(self, query, values=None):
-        cursor = self.connection.cursor()
-        if values:
-            cursor.execute(query, values)
-        else:
-            cursor.execute(query)
-        self.connection.commit()
-
-    # Предметы
-
-    def update_subjects(self):
-        cursor = self.connection.cursor()
-        cursor.execute("SELECT id, name, type FROM item ORDER BY id;")
-        subjects = cursor.fetchall()
-        self.subjects_table.setRowCount(len(subjects))
-
-        for i, subject in enumerate(subjects):
-            for j, value in enumerate(subject):
-                item = QTableWidgetItem(str(value))
-                self.subjects_table.setItem(i, j, item)
-
-    def add_subjects(self):
-        dialog = InputDialog("Добавить предмет", ["Название", "Тип"], self)
-        result = dialog.exec_()
-
-        if result == QDialog.Accepted:
-            values = dialog.get_values()
-            self.safe_execute_query("INSERT INTO item (name, type) VALUES (%s, %s);",
-                                    (values["Название"], values["Тип"]))
-            self.update_subjects()
-
-    def delete_subjects(self):
-        selected_rows = self.subjects_table.selectedItems()
-        if not selected_rows:
-            return
-
-        row = selected_rows[0].row()
-        subject_id = self.subjects_table.item(row, 0).text()
-
-        self.safe_execute_query("DELETE FROM item WHERE id = %s;", (subject_id,))
-        self.update_subjects()
-
-    def edit_subjects(self):
-        selected_rows = self.subjects_table.selectedItems()
-        if not selected_rows:
-            return
-
-        row = selected_rows[0].row()
-        subject_id = self.subjects_table.item(row, 0).text()
-
-        dialog = InputDialog("Изменить предмет", ["Название", "Тип"], self)
-
-        dialog.line_edits["Название"].setText(self.subjects_table.item(row, 1).text())
-        dialog.line_edits["Тип"].setText(self.subjects_table.item(row, 2).text())
-
-        result = dialog.exec_()
-
-        if result == QDialog.Accepted:
-            values = dialog.get_values()
-            self.safe_execute_query("UPDATE item SET name = %s, type = %s WHERE id = %s;",
-                                    (values["Название"], values["Тип"], subject_id))
-            self.update_subjects()
-
-    # Предметы
-
-    # Преподаватели
-
-    def update_teachers(self):
-        cursor = self.connection.cursor()
-        cursor.execute("SELECT id, name FROM teacher ORDER BY id;")
-        teachers = cursor.fetchall()
-        self.teachers_table.setRowCount(len(teachers))
-
-        for i, teacher in enumerate(teachers):
-            for j, value in enumerate(teacher):
-                item = QTableWidgetItem(str(value))
-                self.teachers_table.setItem(i, j, item)
-
-    def add_teachers(self):
-        dialog = InputDialog("Добавить преподавателя", ["Имя"], self)
-        result = dialog.exec_()
-
-        if result == QDialog.Accepted:
-            values = dialog.get_values()
-            self.safe_execute_query("INSERT INTO teacher (name) VALUES (%s);", (values["Имя"],))
-            self.update_teachers()
-
-    def delete_teachers(self):
-        selected_rows = self.teachers_table.selectedItems()
-        if not selected_rows:
-            return
-
-        row = selected_rows[0].row()
-        teacher_id = self.teachers_table.item(row, 0).text()
-
-        self.safe_execute_query("DELETE FROM teacher WHERE id = %s;", (teacher_id,))
-        self.update_teachers()
-
-    def edit_teachers(self):
-        selected_rows = self.teachers_table.selectedItems()
-        if not selected_rows:
-            return
-
-        row = selected_rows[0].row()
-        teacher_id = self.teachers_table.item(row, 0).text()
-
-        dialog = InputDialog("Изменить преподавателя", ["Имя"], self)
-        dialog.line_edits["Имя"].setText(self.teachers_table.item(row, 1).text())
-        result = dialog.exec_()
-
-        if result == QDialog.Accepted:
-            values = dialog.get_values()
-            self.safe_execute_query("UPDATE teacher SET name = %s WHERE id = %s;",
-                                    (values["Имя"], teacher_id))
-            self.update_teachers()
-
-    # Преподаватели
-
-    def safe_execute_query(self, query, data):
-        cursor = self.connection.cursor()
+        super(MainWindow, self).__init__()
+
+        self._connect_to_db()
+
+        self.setWindowTitle("Shedule")
+        self.setGeometry(270, 100, 915, 700)
+
+        self.vbox = QVBoxLayout(self)
+
+        self.tabs = QTabWidget(self)
+        self.vbox.addWidget(self.tabs)
+
+        self.update_button = QPushButton("Update")
+        self.update_button.clicked.connect(lambda _: self._update())
+        self.updatebtn_lay = QHBoxLayout()
+        self.vbox.addLayout(self.updatebtn_lay)
+        self.updatebtn_lay.addWidget(self.update_button)
+
+        self._create_shedule_tab()
+        self._create_teachers_tab()
+        self._create_subjects_tab()
+
+# Создаем метод для подключения к базе данных
+    def _connect_to_db(self):
+        self.conn = psycopg2.connect(database="lab8_db",
+                                     user="postgres",
+                                     password="1324",
+                                     host="localhost",
+                                     port="5432")
+
+        self.cursor = self.conn.cursor()
+
+# Создаем метод для отображения вкладки с расписанием
+    def _create_shedule_tab(self):
+        self.shedule_tab = QWidget()  # Класс QWidget() создает виджет, который будет являться вкладкой
+        self.tabs.addTab(self.shedule_tab, "Расписание")
+        days = ['Понедельник', 'Вторник', 'Среда',
+            'Четверг', 'Пятница', 'Суббота']
+
+        day_tab = QTabWidget(self)
+
+        for i in days:
+            day_tab.addTab(self._create_day_table(i.upper()), i)
+        day_tab_layout = QVBoxLayout()
+        day_tab_layout.addWidget(day_tab)
+        self.shedule_tab.setLayout(day_tab_layout)
+
+    def _create_day_table(self, day):
+        table = QTableWidget()
+        table.setColumnCount(8)  # Метод setColumnCount() задает таблице количество колонок.
+        table.setHorizontalHeaderLabels(["timetable_id", "day", "subject", "room_numb", "start_time", "week", "", ""])
+        self._update_day_table(table, day)
+        return table
+
+    def _update_day_table(self, table, day):
+        self.cursor.execute(f"SELECT * FROM timetable join subject on"
+                            f" timetable.subject = subject.subject_id WHERE day='{day}' "
+                            f"ORDER BY timetable_id")
+        records = list(self.cursor.fetchall())
+        table.setRowCount(len(records) + 1)  # Метод setRowCount() задает таблице количество строк.
+
+        for i, r in enumerate(records):
+            r = list(r)
+            editButton = QPushButton("Edit")
+            delButton = QPushButton("Delete")
+            table.setItem(i, 0,
+                          QTableWidgetItem(str(r[0])))  # Метод setItem() записывает в ячейку с определенным адресом строковые  данные.
+            table.setItem(i, 1,
+                          QTableWidgetItem(str(r[1])))
+            table.setItem(i, 2,
+                          QTableWidgetItem(str(r[7])))
+            table.setItem(i, 3,
+                          QTableWidgetItem(str(r[3])))
+            table.setItem(i, 4,
+                          QTableWidgetItem(str(r[4])))
+            table.setItem(i, 5,
+                          QTableWidgetItem(str(r[5])))
+            table.setCellWidget(i, 6, editButton)  # Метод setCellWidget() помещает в ячейку с определенным адресом виджет.
+            table.setCellWidget(i, 7, delButton)
+
+            editButton.clicked.connect(
+                lambda _, rowNum=i, table=table: self._change_from_timetable(rowNum, table))
+            delButton.clicked.connect(lambda _, rowNum=i, table=table: self._delete_from_timetable(rowNum, table))
+
+        addButton = QPushButton("Add")
+        addButton.clicked.connect(lambda _, rowNum=len(records), table=table: self._add_row_timetable(rowNum, table))
+        table.setCellWidget(len(records), 6, addButton)
+        table.resizeRowsToContents()  # Метод resizeRowsToContents() автоматически адаптирует размеры ячеек таблицы под размер данных внутри этой ячейки.
+
+    def _change_from_timetable(self, rowNum, table):
+        row = list()
+        for i in range(table.columnCount() - 2):
+            try:
+                row.append(table.item(rowNum, i).text())
+            except:
+                row.append(None)
         try:
-            cursor.execute(query, data)
-            self.connection.commit()
+            self.cursor.execute("select subject_id from subject where name=%s", (row[2],))
+            subject = self.cursor.fetchone()
+            row[2] = subject[0]
+            row.append(row[0])
+            row = row[1:]
+            self.cursor.execute("update timetable set day=%s, subject=%s, room_numb=%s, start_time=%s, "
+                                "week=%s where timetable_id=%s", tuple(row))
+            self.conn.commit()
         except Exception as e:
-            self.connection.rollback()
-            print("Ошибка выполнения запроса:", e)
-            QMessageBox.critical(self, "Ошибка",
-                                 "Не удалось выполнить запрос. Проверьте правильность ввода данных.")
-            return False
-        return True
+            QMessageBox.about(self, "Error", str(e))
+            self._connect_to_db()
 
-    # Расписание
-
-    def add_schedule_item(self):
+    def _delete_from_timetable(self, rowNum, table):
         try:
-            dialog = InputDialog("Добавить расписание",
-                                 ["ID предмета", "ID преподавателя", "ID аудитории", "Тип недели"], self)
-
-            start_time_edit = QTimeEdit()
-            end_time_edit = QTimeEdit()
-            start_time_edit.setDisplayFormat("HH:mm")
-            end_time_edit.setDisplayFormat("HH:mm")
-            start_time_edit.setTime(QTime(0, 0))
-            end_time_edit.setTime(QTime(0, 0))
-            dialog.layout().addRow("Начало пары", start_time_edit)
-            dialog.layout().addRow("Конец пары", end_time_edit)
-
-            result = dialog.exec_()
-
-            if result == QDialog.Accepted:
-                values = dialog.get_values()
-                day_of_week = self.schedule_day_tabs.tabText(self.schedule_day_tabs.currentIndex())
-
-                start_time = start_time_edit.time()
-                end_time = end_time_edit.time()
-
-                teacher_id = int(values["ID преподавателя"])
-                self.safe_execute_query(
-                    "INSERT INTO schedule (item_id, teacher_id, day_of_week, start_time, end_time, week_type, room_numb) VALUES (%s, %s, %s, %s, %s, %s, %s);",
-                    (int(values["ID предмета"]), teacher_id, day_of_week,
-                     start_time.toString("HH:mm"),
-                     end_time.toString("HH:mm"), int(values["ID аудитории"]), values['Тип недели']))
-
-                self.update_schedule()
+            id = table.item(rowNum, 0).text()
+            day = table.item(rowNum, 1).text()
+            self.cursor.execute("delete from timetable where timetable_id=%s", (id,))
+            self.conn.commit()
+            table.setRowCount(0)
+            self._update_day_table(table, day)
         except Exception as e:
-            print("Ошибка выполнения запроса:", e)
-            QMessageBox.critical(self, "Ошибка",
-                                 "Не удалось добавить расписание. Проверьте правильность ввода данных.")
+            QMessageBox.about(self, "Error", str(e))
+            self._connect_to_db()
 
-    def delete_schedule(self):
-        current_day_table = self.schedule_day_tabs.currentWidget()
-        selected_rows = current_day_table.selectedItems()
-        if not selected_rows:
-            return
+    def _add_row_timetable(self, rowNum, table):
+        row = list()
+        for i in range(1, table.columnCount() - 2):
+            try:
+                row.append(table.item(rowNum, i).text())
+            except:
+                row.append(None)
+        try:
+            self.cursor.execute("select subject_id from subject where name=%s", (row[1],))
+            subject = self.cursor.fetchone()
+            row[1] = subject[0]
+            self.cursor.execute(
+                "insert into timetable (day, subject, room_numb, start_time, week) values(%s, %s, %s, %s, %s)",
+                (tuple(row)))
+            self.conn.commit()
+            table.setRowCount(0)
+            self._update_day_table(table, row[0])
+        except Exception as e:
+            print(e)
+            QMessageBox.about(self, "Error", str(e))
+            self._connect_to_db()
 
-        row = selected_rows[0].row() if selected_rows else -1
-        if row == -1:
-            return
+    def _create_teachers_tab(self):
+        self.teachers = QWidget()
+        self.tabs.addTab(self.teachers, "Преподаватели")
+        table = QTableWidget(self)
+        table.setColumnCount(5)
+        table.setHorizontalHeaderLabels(["teacher_id", "Имя", "Предмет", "", ""])
 
-        schedule_id = current_day_table.item(row, 0).text()
+        teachers_tab_layout = QVBoxLayout()
+        teachers_tab_layout.addWidget(table)
 
-        self.safe_execute_query(
-            "DELETE FROM schedule WHERE id = %s;",
-            (schedule_id,))
-        self.update_schedule()
+        self._update_teachers_tab(table)
+        self.teachers.setLayout(teachers_tab_layout)
 
-    def edit_schedule(self):
-        current_day_table = self.schedule_day_tabs.currentWidget()
-        selected_items = current_day_table.selectedItems()
-        if not selected_items:
-            return
+    def _update_teachers_tab(self, table):
+        self.cursor.execute(f"SELECT * FROM teacher join subject on teacher.subject=subject.subject_id"
+                            f" ORDER BY teacher_id")
+        records = list(self.cursor.fetchall())
+        table.setRowCount(len(records) + 1)
 
-        row = selected_items[0].row()
-        schedule_id = current_day_table.item(row, 0).text()
+        for i, r in enumerate(records):
+            r = list(r)
+            editButton = QPushButton("Edit")
+            delButton = QPushButton("Delete")
+            table.setItem(i, 0,
+                          QTableWidgetItem(str(r[0])))
+            table.setItem(i, 1,
+                          QTableWidgetItem(str(r[1])))
+            table.setItem(i, 2,
+                          QTableWidgetItem(str(r[4])))
+            table.setCellWidget(i, 3, editButton)
+            table.setCellWidget(i, 4, delButton)
 
-        dialog = InputDialog("Изменить расписание",
-                             ["ID предмета", "ID преподавателя", "ID аудитории", "Тип недели"], self)
+            editButton.clicked.connect(
+                lambda _, rowNum=i, tabl=table: self._change_from_teacher(rowNum, tabl))
+            delButton.clicked.connect(
+                lambda _, rowNum=i, tabl=table:
+                self._delete_from_teacher(rowNum, table))
+        addButton = QPushButton("Add")
+        addButton.clicked.connect(
+            lambda _, rowNum=len(records), table=table: self._add_row_teacher(rowNum, table))
+        table.setCellWidget(len(records), 3, addButton)
+        table.resizeRowsToContents()
 
-        start_time_edit = QTimeEdit()
-        end_time_edit = QTimeEdit()
-        start_time_edit.setDisplayFormat("HH:mm")
-        end_time_edit.setDisplayFormat("HH:mm")
+    def _change_from_teacher(self, rowNum, table):
+        row = list()
 
-        start_time_edit.setTime(QTime.fromString(current_day_table.item(row, 3).text(), "HH:mm"))
-        end_time_edit.setTime(QTime.fromString(current_day_table.item(row, 4).text(), "HH:mm"))
+        for i in range(table.columnCount() - 2):
+            try:
+                row.append(table.item(rowNum, i).text())
+            except:
+                row.append(None)
+        try:
+            self.cursor.execute("select subject_id from subject where name=%s", (row[2],))
+            subject = self.cursor.fetchone()
+            row[2] = subject[0]
+            row.append(row[0])
+            row = row[1:]
+            self.cursor.execute("update teacher set full_name=%s, subject=%s where teacher_id=%s", tuple(row))
+            self.conn.commit()
+        except Exception as e:
+            QMessageBox.about(self, "Error", str(e))
+            self._connect_to_db()
 
-        dialog.layout().addRow("Начало пары", start_time_edit)
-        dialog.layout().addRow("Конец пары", end_time_edit)
+    def _delete_from_teacher(self, rowNum, table):
+        try:
+            id = table.item(rowNum, 0).text()
+            self.cursor.execute("delete from teacher where teacher_id=%s", (id,))
+            self.conn.commit()
+            table.setRowCount(0)
+            self._update_teachers_tab(table)
+        except Exception as e:
+            QMessageBox.about(self, "Error", str(e))
+            self._connect_to_db()
 
-        dialog.line_edits["ID предмета"].setText(current_day_table.item(row, 1).text())
-        dialog.line_edits["ID преподавателя"].setText(current_day_table.item(row, 2).text())
-        dialog.line_edits["ID аудитории"].setText(current_day_table.item(row, 5).text())
-        dialog.line_edits["Тип недели"].setText(current_day_table.item(row, 6).text())
+    def _add_row_teacher(self, rowNum, table):
+        row = list()
+        for i in range(1, table.columnCount() - 2):
+            try:
+                row.append(table.item(rowNum, i).text())
+            except:
+                row.append(None)
+        self.cursor.execute("select subject_id from subject where name=%s", (row[1],))
+        subject = self.cursor.fetchone()
+        row[1] = subject[0]
+        try:
+            self.cursor.execute(
+                "insert into teacher (full_name, subject) values(%s, %s)",
+                (tuple(row)))
+            self.conn.commit()
+            table.setRowCount(0)
+            self._update_teachers_tab(table)
+        except Exception as e:
+            print(e)
+            QMessageBox.about(self, "Error", str(e))
+            self._connect_to_db()
 
-        result = dialog.exec_()
+    def _create_subjects_tab(self):
+        self.subjects = QWidget()
+        self.tabs.addTab(self.subjects, "Предметы")
+        table = QTableWidget(self)
+        table.setColumnCount(4)
+        table.setHorizontalHeaderLabels(["subject_id", "Предмет", "", ""])
 
-        if result == QDialog.Accepted:
-            values = dialog.get_values()
-            day_of_week = self.schedule_day_tabs.tabText(self.schedule_day_tabs.currentIndex())
+        subjects_tab_layout = QVBoxLayout()
+        subjects_tab_layout.addWidget(table)
 
-            start_time = start_time_edit.time()
-            end_time = end_time_edit.time()
+        self._update_subjects_tab(table)
+        self.subjects.setLayout(subjects_tab_layout)
 
-            teacher_id = int(values["ID преподавателя"])
-            week_type = values['Тип недели']
-            if self.safe_execute_query(
-                    "UPDATE schedule SET item_id = %s, teacher_id = %s, day_of_week = %s, start_time = %s, end_time = %s, week_type = %s, room_numb = %s WHERE id = %s;",
-                    (int(values["ID предмета"]), teacher_id, day_of_week,
-                     start_time.toString("HH:mm"),
-                     end_time.toString("HH:mm"), int(values["ID аудитории"]), week_type, schedule_id)):
-                self.update_schedule()
+    def _update_subjects_tab(self, table):
+        self.cursor.execute(f"SELECT * FROM subject ORDER BY subject_id")
+        records = list(self.cursor.fetchall())
+        table.setRowCount(len(records) + 1)
+        for i, r in enumerate(records):
+            r = list(r)
+            editButton = QPushButton("Edit")
+            delButton = QPushButton("Delete")
+            table.setItem(i, 0,
+                          QTableWidgetItem(str(r[0])))
+            table.setItem(i, 1,
+                          QTableWidgetItem(str(r[1])))
+            table.setCellWidget(i, 2, editButton)
+            table.setCellWidget(i, 3, delButton)
 
-    def update_schedule(self):
-        for table, day_of_week in zip([self.monday_table, self.tuesday_table, self.wednesday_table, self.thursday_table,
-                                       self.friday_table, self.saturday_table],
-                                      ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]):
-            cursor = self.connection.cursor()
-            cursor.execute(
-                "SELECT schedule.id, item.name, teacher.name, schedule.start_time, schedule.end_time, schedule.room_numb, schedule.week_type FROM schedule LEFT JOIN item ON schedule.item_id = item.id LEFT JOIN teacher ON schedule.teacher_id = teacher.id WHERE schedule.day_of_week = %s ORDER BY schedule.start_time;",
-                (day_of_week,))
+            editButton.clicked.connect(
+                lambda _, rowNum=i, table=table: self._change_from_subjects(rowNum, table))
+            delButton.clicked.connect(
+                lambda _, rowNum=i, table=table:
+                self._delete_from_subjects(rowNum, table))
 
-            schedule_items = cursor.fetchall()
-            table.setRowCount(60)
+        addButton = QPushButton("Add")
+        addButton.clicked.connect(
+            lambda _, rowNum=len(records), table=table: self._add_row_subject(rowNum, table))
+        table.setCellWidget(len(records), 2, addButton)
+        table.resizeRowsToContents()
 
-            for i, schedule_item in enumerate(schedule_items):
-                table.insertRow(table.rowCount())
-                for col, value in enumerate(schedule_item):
-                    item = QTableWidgetItem(str(value) if value is not None else "")
-                    table.setItem(i, col, item)
+    def _change_from_subjects(self, rowNum, table):
+        row = list()
 
-    # Расписание
+        for i in range(table.columnCount() - 2):
+            try:
+                row.append(table.item(rowNum, i).text())
+            except:
+                row.append(None)
+        try:
+            row.append(row[0])
+            row = row[1:]
+            self.cursor.execute("update subject set name=%s where subject_id=%s", tuple(row))
+            self.conn.commit()
+        except Exception as e:
+            QMessageBox.about(self, "Error", str(e))
+            self._connect_to_db()
+
+    def _delete_from_subjects(self, rowNum, table):
+        try:
+            id = table.item(rowNum, 0).text()
+            self.cursor.execute("delete from teacher where subject=%s", (id,))
+            self.cursor.execute("delete from timetable where subject=%s", (id,))
+            self.cursor.execute("delete from subject where subject_id=%s", (id,))
+            self.conn.commit()
+            table.setRowCount(0)
+            self._update_subjects_tab(table)
+        except Exception as e:
+            QMessageBox.about(self, "Error", str(e))
+            self._connect_to_db()
+
+    def _add_row_subject(self, rowNum, table):
+        subject = table.item(rowNum, 1).text()
+        try:
+            self.cursor.execute(
+                "insert into subject (name) values(%s)",
+                (subject,))
+            self.conn.commit()
+            table.setRowCount(0)
+            self._update_subjects_tab(table)
+        except Exception as e:
+            print(e)
+            QMessageBox.about(self, "Error", str(e))
+            self._connect_to_db()
+
+# Создаем метод обновляющий все таблицы на вкладке
+    def _update(self):
+        self.tabs.removeTab(0)
+        self.tabs.removeTab(0)
+        self.tabs.removeTab(0)
+        self._create_shedule_tab()
+        self._create_teachers_tab()
+        self._create_subjects_tab()
 
 
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = DatabaseApp()
-    window.show()
-    sys.exit(app.exec_())
+app = QApplication(sys.argv)
+win = MainWindow()
+win.show()
+sys.exit(app.exec_())
